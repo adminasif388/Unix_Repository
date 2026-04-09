@@ -1,0 +1,68 @@
+---
+- name: Pre-check multiple Linux servers
+  hosts: all
+  gather_facts: yes
+  become: yes
+
+  vars:
+    required_services:
+      - ssh
+      - nginx
+      - docker
+
+  tasks:
+
+    - name: Check if host is reachable via Ansible ping
+      ansible.builtin.ping:
+      register: ping_result
+      ignore_errors: yes
+
+    - name: Report ping result
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} is reachable"
+      when: ping_result.ping is defined
+
+    - name: Check available disk space
+      ansible.builtin.command: df -h /
+      register: disk_result
+
+    - name: Show disk usage
+      ansible.builtin.debug:
+        var: disk_result.stdout_lines
+
+    - name: Check memory usage
+      ansible.builtin.command: free -m
+      register: mem_result
+
+    - name: Show memory info
+      ansible.builtin.debug:
+        var: mem_result.stdout_lines
+
+    - name: Check CPU load
+      ansible.builtin.command: uptime
+      register: cpu_result
+
+    - name: Show CPU load
+      ansible.builtin.debug:
+        var: cpu_result.stdout_lines
+
+    - name: Check required services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+      loop: "{{ required_services }}"
+      register: service_status
+      ignore_errors: yes
+
+    - name: Display service check results
+      ansible.builtin.debug:
+        var: service_status.results
+
+    - name: Check open ports 22 and 80
+      ansible.builtin.shell: "ss -tulnp | grep -E ':22|:80'"
+      register: port_check
+      ignore_errors: yes
+
+    - name: Display port check
+      ansible.builtin.debug:
+        var: port_check.stdout_lines
