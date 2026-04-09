@@ -1,0 +1,17 @@
+---
+- name: Check server connectivity and save results
+  hosts: all_servers
+  gather_facts: false
+  tasks:
+
+    - name: Ping the server
+      ansible.builtin.ping:
+      register: ping_result
+      ignore_errors: yes
+
+    - name: Append connectivity result to file in /tmp
+      local_action:
+        module: lineinfile
+        path: /tmp/server_connectivity_results.txt
+        line: "Host: {{ inventory_hostname }} | Status: {{ 'SUCCESS' if ping_result.ping is defined else 'UNREACHABLE' }}"
+        create: yes
