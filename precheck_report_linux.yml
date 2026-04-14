@@ -100,7 +100,7 @@
           {{ uptime_result.stdout }}
 
           --- SERVICES ---
-          {{ service_status.results | to_nice_yml }}
+          {{ service_status.results | to_nice_yaml }}
 
           --- PORT CHECK ---
           {{ port_check.stdout | default('No output / ports not open') }}
