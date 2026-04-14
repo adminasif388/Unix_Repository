@@ -25,7 +25,7 @@
       ignore_errors: yes
 
     - name: Save SUCCESS result
-      delegate_to: localhost
+      delegate_to: 192.168.31.159
       lineinfile:
         path: "{{ report_file }}"
         line: "Host: {{ inventory_hostname }} - Status: SUCCESS"
