@@ -1,7 +1,7 @@
 
 ---
 - name: Server Connectivity Check and Save Report
-  hosts: linux_servers
+  hosts : all
   gather_facts: no
   vars:
     report_file: "/tmp/connectivity_report.txt"
