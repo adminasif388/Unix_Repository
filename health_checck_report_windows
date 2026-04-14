@@ -1,0 +1,81 @@
+---
+- name: Windows Server Health Check
+  hosts: all
+  gather_facts: no
+
+  vars:
+    services_to_check:
+      - WinRM
+      - Spooler
+      - wuauserv
+
+  tasks:
+
+    # ---------------- CPU ----------------
+    - name: Get CPU usage
+      ansible.windows.win_shell: |
+        Get-CimInstance Win32_Processor |
+        Select-Object LoadPercentage
+      register: cpu_result
+
+    # ---------------- MEMORY ----------------
+    - name: Get memory usage
+      ansible.windows.win_shell: |
+        Get-CimInstance Win32_OperatingSystem |
+        Select-Object TotalVisibleMemorySize,FreePhysicalMemory
+      register: mem_result
+
+    # ---------------- DISK ----------------
+    - name: Get disk usage
+      ansible.windows.win_shell: |
+        Get-PSDrive -PSProvider FileSystem |
+        Select-Object Name,Used,Free
+      register: disk_result
+
+    # ---------------- SERVICES ----------------
+    - name: Check services status
+      ansible.windows.win_service:
+        name: "{{ item }}"
+      loop: "{{ services_to_check }}"
+      register: service_result
+      ignore_errors: yes
+
+    # ---------------- BUILD REPORT ----------------
+    - name: Build health report
+      set_fact:
+        report: |
+          ===========================
+          WINDOWS HEALTH REPORT
+          ===========================
+
+          Host: {{ inventory_hostname }}
+
+          ----- CPU -----
+          {{ cpu_result.stdout }}
+
+          ----- MEMORY -----
+          {{ mem_result.stdout }}
+
+          ----- DISK -----
+          {{ disk_result.stdout }}
+
+          ----- SERVICES -----
+          {{ service_result.results | to_nice_json }}
+
+    # ---------------- SAVE REPORT ----------------
+    - name: Ensure reports folder exists
+      file:
+        path: /tmp
+        state: directory
+      delegate_to: vm01
+
+    - name: Save report locally
+      copy:
+        content: "{{ report }}"
+        dest: "/tmp/{{ inventory_hostname }}_health_check_report.txt"
+      delegate_to: vm01
+
+    # ---------------- SHOW OUTPUT ----------------
+    - name: Show report location
+      debug:
+        msg: "Windows health report saved for {{ inventory_hostname }}"
