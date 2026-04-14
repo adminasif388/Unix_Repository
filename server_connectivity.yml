@@ -9,8 +9,8 @@
 - name: Send email result
       delegate_to: 192.16.31.159
       mail:
-        host: smtp.gmail.com     # change this
-        port: 25                  # change if needed
+        host: smtp.gmail.com
+        port: 25
         to: asifali388@gmail.com
         from: nazmabatool388@gmail.com
         subject: "Server {{ inventory_hostname }} Status"
