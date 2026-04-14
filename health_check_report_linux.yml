@@ -1,67 +1,59 @@
 ---
-- name: Linux Server Connectivity Check and Email Report
+- name: Simple Linux Connectivity Check
   hosts: all
   gather_facts: no
 
   vars:
     report_file: "/tmp/connectivity_report.txt"
-    email_to: "asifali388@gmail.com"
-    email_from: "nazmabatool388@gmail.com"
-    smtp_host: "smtp.example.com"
-    smtp_port: 25
 
   tasks:
 
-    - name: Ensure report file is clean
+    - name: Clear old report
       delegate_to: 192.168.31.159
       run_once: true
       copy:
         dest: "{{ report_file }}"
         content: ""
 
-    - name: Check connectivity using ping module
+    - name: Test connectivity
       ping:
-      register: ping_result
+      register: result
       ignore_errors: yes
 
-    - name: Save SUCCESS result
+    - name: Write SUCCESS
+      delegate_to: localhost
+      lineinfile:
+        path: "{{ report_file }}"
+        line: "{{ inventory_hostname }} : SUCCESS"
+      when: result is succeeded
+
+    - name: Write FAILED
       delegate_to: 192.168.31.159
       lineinfile:
         path: "{{ report_file }}"
-        line: "Host: {{ inventory_hostname }} - Status: SUCCESS"
-      when: ping_result is succeeded
-
-    - name: Save FAILED result
-      delegate_to: 192.168.31.159
-      lineinfile:
-        path: "{{ report_file }}"
-        line: "Host: {{ inventory_hostname }} - Status: FAILED"
-      when: ping_result is failed
+        line: "{{ inventory_hostname }} : FAILED"
+      when: result is failed
 
 
-- name: Send Email Report
+- name: Send Email
   hosts: 192.168.31.159
   gather_facts: no
 
   vars:
     report_file: "/tmp/connectivity_report.txt"
-    email_to: "asifali388@gmail.com"
-    email_from: "nazmabatool388@gmail.com"
-    smtp_host: "smtp.example.com"
-    smtp_port: 25
 
   tasks:
 
-    - name: Read report content
+    - name: Read report
       slurp:
         src: "{{ report_file }}"
-      register: report_content
+      register: report
 
-    - name: Send email
+    - name: Send mail
       mail:
-        host: "{{ smtp_host }}"
-        port: "{{ smtp_port }}"
-        to: "{{ email_to }}"
-        from: "{{ email_from }}"
-        subject: "Ansible Connectivity Report"
-        body: "{{ report_content.content | b64decode }}"
+        host: "smtp.gmail.com"   # change this
+        port: 25                  # change if needed
+        to: "asifali388@gmail.com"
+        from: "nazmabatool388@gmail.com"
+        subject: "Server Connectivity Report"
+        body: "{{ report.content | b64decode }}"
