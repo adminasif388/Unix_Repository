@@ -5,4 +5,16 @@
   tasks:
     - name: Ping tasks
       ansible.builtin.ping:
+
+- name: Send email result
+      delegate_to: 192.16.31.159
+      mail:
+        host: smtp.gmail.com     # change this
+        port: 25                  # change if needed
+        to: asifali388@gmail.com
+        from: nazmabatool388@gmail.com
+        subject: "Server {{ inventory_hostname }} Status"
+        body: |
+          Host: {{ inventory_hostname }}
+          Status: {{ 'SUCCESS' if result is succeeded else 'FAILED' }}
       
