@@ -1,59 +1,76 @@
 ---
-- name: Simple Linux Connectivity Check
+- name: Pre-check multiple Linux servers
   hosts: all
-  gather_facts: true
+  gather_facts: yes
+  become: yes
 
   vars:
-    report_file: "/tmp/connectivity_report.txt"
+    required_services:
+      - sshd
+      - NetworkManager
+      - chronyd
 
   tasks:
 
-    - name: Clear old report
-      delegate_to: 192.168.31.159
-      run_once: true
-      copy:
-        dest: "{{ report_file }}"
-        content: ""
+    - name: Check if host is reachable via Ansible ping
+      ansible.builtin.ping:
+      register: ping_result
+      ignore_errors: yes
 
-    - name: Test connectivity
-      ping:
-      register: result
-      ignore_errors: true
+    - name: Report ping result
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} is reachable"
+      when: ping_result.ping is defined
 
-    - name: Write SUCCESS
-      delegate_to: 192.168.31.159
-      lineinfile:
-        path: "{{ report_file }}"
-        line: "{{ inventory_hostname }} : SUCCESS"
-      when: result is succeeded
+    - name: Check available disk space
+      ansible.builtin.command: df -h /
+      register: disk_result
 
-    - name: Write FAILED
-      delegate_to: 192.168.31.159
-      lineinfile:
-        path: "{{ report_file }}"
-        line: "{{ inventory_hostname }} : FAILED"
-      when: result is failed
+    - name: Show disk usage
+      ansible.builtin.debug:
+        var: disk_result.stdout_lines
 
+    - name: Check memory usage
+      ansible.builtin.command: free -m
+      register: mem_result
 
-- name: Send Email
-  hosts: 192.168.31.159
-  gather_facts: false
+    - name: Show memory info
+      ansible.builtin.debug:
+        var: mem_result.stdout_lines
 
-  vars:
-    report_file: "/tmp/connectivity_report.txt"
+    - name: Check CPU load
+      ansible.builtin.command: uptime
+      register: cpu_result
 
-  tasks:
+    - name: Show CPU load
+      ansible.builtin.debug:
+        var: cpu_result.stdout_lines
 
-    - name: Read report
-      slurp:
-        src: "{{ report_file }}"
-      register: report
+    - name: Check required services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+      loop: "{{ required_services }}"
+      register: service_status
+      ignore_errors: yes
 
-    - name: Send mail
-      mail:
-        host: "smtp.gmail.com"   # change this
-        port: 25                  # change if needed
-        to: "asifali388@gmail.com"
-        from: "nazmabatool388@gmail.com"
-        subject: "Server Connectivity Report"
-        body: "{{ report.content | b64decode }}"
+    - name: Display service check results
+      ansible.builtin.debug:
+        var: service_status.results
+
+    - name: Check open ports 22 and 80
+      ansible.builtin.shell: "ss -tulnp | grep -E ':22|:80'"
+      register: port_check
+      ignore_errors: yes
+
+    - name: Display port check
+      ansible.builtin.debug:
+        var: port_check.stdout_lines
+
+    - name: Check system uptime
+      ansible.builtin.command: uptime
+      register: uptime_result
+
+    - name: Show uptime result
+      ansible.builtin.debug:
+        var: uptime_result.stdout_lines    
