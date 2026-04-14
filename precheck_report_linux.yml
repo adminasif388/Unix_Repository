@@ -75,16 +75,18 @@
       ansible.builtin.debug:
         var: uptime_result.stdout_lines   
 
-    - name: Send email report
-      hosts: vm01
-      gather_facts: true
+ - name: Ensure reports directory exists
+      file:
+        path: /tmp
+        state: directory
+      delegate_to: vm01
 
-      tasks:
-    - name: Send mail
-      ansible.builtin.mail:
-        host: smtp.gmail.com
-        port: 25
-        to: asifali388@gmail.com
-        from: asifali388@gmail.com
-        subject: "Ansible Health Check Report Linux"
-        body: "This is a test report from Ansible"   
+    - name: Save report to file
+      copy:
+        content: "{{ final_report }}"
+        dest: "/tmp/{{ inventory_hostname }}_health_check_report.txt"
+      delegate_to: vm01
+
+    - name: Show report location
+      debug:
+        msg: "Report saved for {{ inventory_hostname }} in /tmp"
