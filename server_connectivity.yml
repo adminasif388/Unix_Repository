@@ -1,4 +1,3 @@
-
 ---
 - name: Server Connectivity Check and Save Report
   hosts : all
