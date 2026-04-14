@@ -1,45 +1,46 @@
 ---
-- name: Linux Health Check
+- name: Server Health Check and Save Report
   hosts: all
-  become: true
-  gather_facts: true
+  gather_facts: yes
+
+  vars:
+    report_file: "/tmp/system_report.txt"
 
   tasks:
 
-    - name: Get uptime
-      command: uptime
-      register: uptime_output
-
-    - name: Check CPU load
-      command: top -bn1 | grep "load average"
-      register: cpu_load
-
-    - name: Check memory usage
-      command: free -m
-      register: memory_usage
-
-    - name: Check disk usage
-      command: df -h
-      register: disk_usage
-
-    - name: Save report locally
-      copy:
-        content: |
-          ===== Health Check Report =====
-
-          Host: {{ inventory_hostname }}
-
-          --- Uptime ---
-          {{ uptime_output.stdout }}
-
-          --- CPU Load ---
-          {{ cpu_load.stdout }}
-
-          --- Memory Usage ---
-          {{ memory_usage.stdout }}
-
-          --- Disk Usage ---
-          {{ disk_usage.stdout }}
-
-            dest: "./reports/{{ inventory_hostname }}_report.txt"
+    - name: Ensure report file exists on control node
       delegate_to: vm01
+      run_once: true
+      file:
+        path: "{{ report_file }}"
+        state: touch
+
+    - name: Collect CPU load
+      set_fact:
+        cpu_load: "{{ ansible_load_avg['1m'] }}"
+
+    - name: Collect Memory usage
+      set_fact:
+        memory_used: "{{ ansible_memtotal_mb - ansible_memfree_mb }}"
+        memory_total: "{{ ansible_memtotal_mb }}"
+
+    - name: Collect Disk usage
+      set_fact:
+        disk_usage: "{{ ansible_mounts[0].size_used // 1024 // 1024 }} MB used of {{ ansible_mounts[0].size_total // 1024 // 1024 }} MB"
+
+    - name: Collect Uptime
+      set_fact:
+        uptime: "{{ ansible_uptime_seconds // 3600 }} hours"
+
+    - name: Save report to file
+      delegate_to: vm01
+      lineinfile:
+        path: "{{ report_file }}"
+        line: |
+          Host: {{ inventory_hostname }}
+          CPU Load (1m): {{ cpu_load }}
+          Memory: {{ memory_used }}MB / {{ memory_total }}MB
+          Disk: {{ disk_usage }}
+          Uptime: {{ uptime }}
+          -------------------------
+        create: yes
