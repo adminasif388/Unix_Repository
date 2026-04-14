@@ -1,41 +1,42 @@
 ---
-- name: Install Agent and Ensure Service is Running
+- name: Install Monitoring Agent and Ensure Service is Running
   hosts: all
   become: yes
   gather_facts: yes
 
   vars:
-    agent_name: "httpd"   # change this to your agent (e.g. telegraf, sshd, etc.)
+    monitoring_agent: "telegraf"   # change to your agent (node_exporter, zabbix-agent, etc.)
 
   tasks:
 
-    - name: Install agent package (Debian/Ubuntu)
+    - name: Install monitoring agent on Debian/Ubuntu
       ansible.builtin.apt:
-        name: "{{ agent_name }}"
+        name: "{{ monitoring_agent }}"
         state: present
         update_cache: yes
       when: ansible_os_family == "Debian"
 
-    - name: Install agent package (RHEL/CentOS)
+    - name: Install monitoring agent on RHEL/CentOS
       ansible.builtin.yum:
-        name: "{{ agent_name }}"
+        name: "{{ monitoring_agent }}"
         state: present
       when: ansible_os_family == "RedHat"
 
-    - name: Enable agent service
+    - name: Enable monitoring agent service
       ansible.builtin.systemd:
-        name: "{{ agent_name }}"
+        name: "{{ monitoring_agent }}"
         enabled: yes
 
-    - name: Start agent service
+    - name: Start monitoring agent service
       ansible.builtin.systemd:
-        name: "{{ agent_name }}"
+        name: "{{ monitoring_agent }}"
         state: started
 
-    - name: Check service status
-      ansible.builtin.command: systemctl status "{{ agent_name }}"
-      register: service_status
+    - name: Verify service status
+      ansible.builtin.command: systemctl is-active {{ monitoring_agent }}
+      register: agent_status
+      ignore_errors: yes
 
     - name: Show service status
       ansible.builtin.debug:
-        var: service_status.stdout_lines
+        msg: "Monitoring agent {{ monitoring_agent }} is {{ agent_status.stdout }}"
