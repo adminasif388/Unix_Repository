@@ -1,46 +1,8 @@
 ---
 - name: Server Connectivity Check and Save Report
-  hosts : all
-  gather_facts: no
-  vars:
-    report_file: "/tmp/connectivity_report.txt"
-
+  hosts: all
+  become: false
   tasks:
-
-    - name: Ensure report file exists on control node
-      ansible.builtin.file:
-        path: "{{ report_file }}"
-        state: touch
-      delegate_to: 192.168.31.244
-      run_once: true
-
-    - name: Ansible ping check (SSH connectivity)
+    - name: Ping tasks
       ansible.builtin.ping:
-      register: ansible_ping
-      ignore_errors: yes
-
-    - name: ICMP ping check
-      ansible.builtin.shell: "ping -c 2 {{ inventory_hostname }}"
-      register: icmp_ping
-      ignore_errors: yes
-
-    - name: Check SSH port connectivity
-      ansible.builtin.shell: "nc -zv {{ inventory_hostname }} 22"
-      register: port_check
-      ignore_errors: yes
-
-    - name: Prepare report line
-      ansible.builtin.set_fact:
-        report_line: |
-          Host: {{ inventory_hostname }}
-          Ansible Ping: {{ 'SUCCESS' if ansible_ping.ping is defined else 'FAILED' }}
-          ICMP Ping: {{ 'SUCCESS' if icmp_ping.rc == 0 else 'FAILED' }}
-          Port 22: {{ 'OPEN' if port_check.rc == 0 else 'CLOSED' }}
-          ----------------------------
-
-    - name: Save report to /tmp file on control node
-      ansible.builtin.lineinfile:
-        path: "{{ report_file }}"
-        line: "{{ report_line }}"
-        create: yes
-      delegate_to: 192.168.31.244
+      
