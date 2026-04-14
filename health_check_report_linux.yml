@@ -1,46 +1,37 @@
 ---
-- name: Server Health Check and Save Report
+- name: Linux Server Connectivity Check
   hosts: all
-  gather_facts: yes
+  gather_facts: no
 
   vars:
-    report_file: "/tmp/system_report.txt"
+    report_file: "/tmp/connectivity_report.txt"
 
   tasks:
 
     - name: Ensure report file exists on control node
-      delegate_to: vm01
+      delegate_to: 192.168.31.159
       run_once: true
       file:
         path: "{{ report_file }}"
         state: touch
 
-    - name: Collect CPU load
-      set_fact:
-        cpu_load: "{{ ansible_load_avg['1m'] }}"
+    - name: Check connectivity using ping module
+      ping:
+      register: ping_result
+      ignore_errors: yes
 
-    - name: Collect Memory usage
-      set_fact:
-        memory_used: "{{ ansible_memtotal_mb - ansible_memfree_mb }}"
-        memory_total: "{{ ansible_memtotal_mb }}"
-
-    - name: Collect Disk usage
-      set_fact:
-        disk_usage: "{{ ansible_mounts[0].size_used // 1024 // 1024 }} MB used of {{ ansible_mounts[0].size_total // 1024 // 1024 }} MB"
-
-    - name: Collect Uptime
-      set_fact:
-        uptime: "{{ ansible_uptime_seconds // 3600 }} hours"
-
-    - name: Save report to file
-      delegate_to: vm01
+    - name: Save SUCCESS result
+      delegate_to: 192.168.31.159
       lineinfile:
         path: "{{ report_file }}"
-        line: |
-          Host: {{ inventory_hostname }}
-          CPU Load (1m): {{ cpu_load }}
-          Memory: {{ memory_used }}MB / {{ memory_total }}MB
-          Disk: {{ disk_usage }}
-          Uptime: {{ uptime }}
-          -------------------------
+        line: "Host: {{ inventory_hostname }} - Status: SUCCESS"
         create: yes
+      when: ping_result is succeeded
+
+    - name: Save FAILED result
+      delegate_to: l92.168.31.159
+      lineinfile:
+        path: "{{ report_file }}"
+        line: "Host: {{ inventory_hostname }} - Status: FAILED"
+        create: yes
+      when: ping_result is failed
