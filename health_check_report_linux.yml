@@ -73,4 +73,50 @@
 
     - name: Show uptime result
       ansible.builtin.debug:
-        var: uptime_result.stdout_lines    
+        var: uptime_result.stdout_lines   
+
+    - name: Build final report
+      set_fact:
+        final_report: |
+          ==============================
+          SERVER PRE-CHECK REPORT
+          ==============================
+
+          Host: {{ inventory_hostname }}
+
+          --- PING ---
+          {{ ping_result.ping | default('FAILED') }}
+
+          --- DISK ---
+          {{ disk_result.stdout }}
+
+          --- MEMORY ---
+          {{ mem_result.stdout }}
+
+          --- CPU LOAD ---
+          {{ cpu_result.stdout }}
+
+          --- UPTIME ---
+          {{ uptime_result.stdout }}
+
+          --- SERVICES ---
+          {{ service_status.results | to_nice_yaml }}
+
+          --- PORT CHECK ---
+          {{ port_check.stdout | default('No output / ports not open') }}
+
+    - name: Ensure reports directory exists
+      file:
+        path: /tmp
+        state: directory
+      delegate_to: vm01
+
+    - name: Save report to file
+      copy:
+        content: "{{ final_report }}"
+        dest: "/tmp/{{ inventory_hostname }}_health_check_report.txt"
+      delegate_to: vm01
+
+    - name: Show report location
+      debug:
+        msg: "Report saved for {{ inventory_hostname }} in /tmp/"  
