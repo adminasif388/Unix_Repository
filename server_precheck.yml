@@ -7,8 +7,8 @@
   vars:
     required_services:
       - sshd
-      - nginx
-      - docker
+      - NwtworkManager
+      - chronyd
 
   tasks:
 
