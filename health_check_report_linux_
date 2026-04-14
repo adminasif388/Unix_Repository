@@ -1,0 +1,67 @@
+---
+- name: Linux Health Check
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+
+    - name: Get uptime
+      command: uptime
+      register: uptime_output
+
+    - name: Check CPU load
+      command: top -bn1 | grep "load average"
+      register: cpu_load
+
+    - name: Check memory usage
+      command: free -m
+      register: memory_usage
+
+    - name: Check disk usage
+      command: df -h
+      register: disk_usage
+
+    - name: Check top 5 processes by CPU
+      shell: ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%cpu | head -n 6
+      register: top_cpu_processes
+
+    - name: Check top 5 processes by memory
+      shell: ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head -n 6
+      register: top_mem_processes
+
+    - name: Check failed services
+      command: systemctl --failed
+      register: failed_services
+      ignore_errors: yes
+
+    - name: Save report locally
+      copy:
+        content: |
+          ===== Health Check Report =====
+
+          Host: {{ inventory_hostname }}
+
+          --- Uptime ---
+          {{ uptime_output.stdout }}
+
+          --- CPU Load ---
+          {{ cpu_load.stdout }}
+
+          --- Memory Usage ---
+          {{ memory_usage.stdout }}
+
+          --- Disk Usage ---
+          {{ disk_usage.stdout }}
+
+          --- Top CPU Processes ---
+          {{ top_cpu_processes.stdout }}
+
+          --- Top Memory Processes ---
+          {{ top_mem_processes.stdout }}
+
+          --- Failed Services ---
+          {{ failed_services.stdout }}
+
+        dest: "./reports/{{ inventory_hostname }}_report.txt"
+      delegate_to: vm01
