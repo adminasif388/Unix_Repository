@@ -66,3 +66,11 @@
     - name: Display port check
       ansible.builtin.debug:
         var: port_check.stdout_lines
+
+    - name: Check system uptime
+      ansible.builtin.command: uptime
+      register: uptime_result
+
+    - name: Show uptime result
+      ansible.builtin.debug:
+        var: uptime_result.stdout_lines    
