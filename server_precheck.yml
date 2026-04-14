@@ -6,7 +6,7 @@
 
   vars:
     required_services:
-      - ssh
+      - sshd
       - nginx
       - docker
 
