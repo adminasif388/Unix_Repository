@@ -1,0 +1,41 @@
+---
+- name: Install Agent and Ensure Service is Running
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    agent_name: "httpd"   # change this to your agent (e.g. telegraf, sshd, etc.)
+
+  tasks:
+
+    - name: Install agent package (Debian/Ubuntu)
+      ansible.builtin.apt:
+        name: "{{ agent_name }}"
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install agent package (RHEL/CentOS)
+      ansible.builtin.yum:
+        name: "{{ agent_name }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Enable agent service
+      ansible.builtin.systemd:
+        name: "{{ agent_name }}"
+        enabled: yes
+
+    - name: Start agent service
+      ansible.builtin.systemd:
+        name: "{{ agent_name }}"
+        state: started
+
+    - name: Check service status
+      ansible.builtin.command: systemctl status "{{ agent_name }}"
+      register: service_status
+
+    - name: Show service status
+      ansible.builtin.debug:
+        var: service_status.stdout_lines
