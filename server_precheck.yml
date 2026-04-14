@@ -75,25 +75,16 @@
       ansible.builtin.debug:
         var: uptime_result.stdout_lines   
 
-    - name: Send Email Report
-  hosts: vm01
-  gather_facts: no
+    - name: Send email report
+      hosts: vm01
+      gather_facts: true
 
-  vars:
-    report_file: "/tmp/healthcheck_report.txt"
-
-  tasks:
-
-    - name: Read report file
-      ansible.builtin.slurp:
-        src: "{{ report_file }}"
-      register: report_content
-
-    - name: Send email
+      tasks:
+    - name: Send mail
       ansible.builtin.mail:
-        host: "smtp.gmail.com"
+        host: smtp.gmail.com
         port: 25
-        to: "asifali388@gmail.com"
-        from: "asifali388@gmail.com"
-        subject: "Linux Servers Health Check Report"
-        body: "{{ report_content.content | b64decode    
+        to: asifali388@gmail.com
+        from: asifali388@gmail.com
+        subject: "Ansible Health Check Report Linux"
+        body: "This is a test report from Ansible"   
