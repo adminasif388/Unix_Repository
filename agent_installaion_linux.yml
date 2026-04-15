@@ -16,16 +16,16 @@
     # ----------------------------
     - name: Copy SEP package to target
       copy:
-        src: "/home/ansible/sep_linux_client.zip"
-        dest: "/tmp/sep_linux_client.zip"
+        src: /home/ansible/sep_linux_client.zip
+        dest: /tmp/sep_linux_client.zip
 
     # ----------------------------
     # Extract package
     # ----------------------------
     - name: Extract SEP package
       ansible.builtin.unarchive:
-        src: "/tmp/sep_linux_client.zip"
-        dest: "/opt/sep/"
+        src: /tmp/sep_linux_client.zip
+        dest: /opt/sep/
         remote_src: yes
 
     # ----------------------------
