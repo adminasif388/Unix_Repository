@@ -5,7 +5,7 @@
   gather_facts: yes
 
   vars:
-    sep_package_src: "/home/ansible/files/sep_linux_client.zip"   # change to your package path
+    sep_package_src: "/home/ansible/sep_linux_client.zip"   # change to your package path
     sep_extract_dir: "/tmp/sep_linux_client.zip"
     sep_installer: "install.sh"
 
