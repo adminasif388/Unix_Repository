@@ -6,11 +6,19 @@
 
   vars:
     itm_install_dir: "/opt/IBM/ITM"
-    itm_package_src: "/tmp/itm_agent.zip"  
+    itm_package_src: "/tmp/itm_agent.zip"
     itm_extract_dir: "/tmp/itm_agent"
-    itm_agent_service: "itmcmd"               
 
   tasks:
+
+    # ----------------------------
+    # Ensure extract directory exists
+    # ----------------------------
+    - name: Create extract directory
+      ansible.builtin.file:
+        path: "{{ itm_extract_dir }}"
+        state: directory
+        mode: '0755'
 
     # ----------------------------
     # Copy ITM package
@@ -18,14 +26,15 @@
     - name: Copy ITM agent package to target
       ansible.builtin.copy:
         src: "{{ itm_package_src }}"
-        dest: "/tmp/itm_agent.zip"
+        dest: "{{ itm_package_src }}"
+        mode: '0644'
 
     # ----------------------------
     # Extract package
     # ----------------------------
     - name: Extract ITM package
       ansible.builtin.unarchive:
-        src: "/tmp/itm_agent.zip"
+        src: "{{ itm_package_src }}"
         dest: "{{ itm_extract_dir }}"
         remote_src: yes
 
@@ -33,42 +42,44 @@
     # Install ITM agent
     # ----------------------------
     - name: Run ITM silent installation
-      ansible.builtin.shell: |
-        cd {{ itm_extract_dir }}
-        ./install.sh -silent
+      ansible.builtin.shell: ./install.sh -silent
       args:
-        creates: "{{ itm_install_dir }}"
+        chdir: "{{ itm_extract_dir }}"
+        creates: "{{ itm_install_dir }}/bin/itmcmd"
       register: install_output
 
     - name: Show install output
       ansible.builtin.debug:
         var: install_output.stdout_lines
+      when: install_output is defined
 
     # ----------------------------
     # Configure ITM agent (optional)
     # ----------------------------
     - name: Configure ITM agent (silent config)
-      ansible.builtin.shell: |
-        {{ itm_install_dir }}/bin/itmcmd config -A
+      ansible.builtin.shell: "{{ itm_install_dir }}/bin/itmcmd config -A"
       register: config_output
       ignore_errors: yes
+      when: itm_install_dir is exists
 
     # ----------------------------
     # Start ITM agent
     # ----------------------------
     - name: Start ITM agent
-      ansible.builtin.shell: |
-        {{ itm_install_dir }}/bin/itmcmd agent start
+      ansible.builtin.shell: "{{ itm_install_dir }}/bin/itmcmd agent start"
       register: start_output
+      when: itm_install_dir is exists
 
     # ----------------------------
     # Check ITM agent status
     # ----------------------------
     - name: Check ITM agent status
-      ansible.builtin.shell: |
-        {{ itm_install_dir }}/bin/itmcmd agent status
+      ansible.builtin.shell: "{{ itm_install_dir }}/bin/itmcmd agent status"
       register: status_output
+      changed_when: false
+      when: itm_install_dir is exists
 
     - name: Show ITM agent status
       ansible.builtin.debug:
         var: status_output.stdout_lines
+      when: status_output is defined
