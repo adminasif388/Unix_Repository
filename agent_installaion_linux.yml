@@ -1,12 +1,12 @@
 ---
 - name: Install and Start ITM Agent on Linux & ensure services running
   hosts: all
-  become: true
-  gather_facts: true
+  become: yes
+  gather_facts: yes
 
   vars:
     itm_install_dir: "/opt/IBM/ITM"
-    itm_package_src: "/tmp/itm_agent.tar.gz"  
+    itm_package_src: "/tmp/itm_agent.zip"  
     itm_extract_dir: "/tmp/itm_agent"
     itm_agent_service: "itmcmd"               
 
@@ -18,14 +18,14 @@
     - name: Copy ITM agent package to target
       ansible.builtin.copy:
         src: "{{ itm_package_src }}"
-        dest: "/tmp/itm_agent.tar.gz"
+        dest: "/tmp/itm_agent.zip"
 
     # ----------------------------
     # Extract package
     # ----------------------------
     - name: Extract ITM package
       ansible.builtin.unarchive:
-        src: "/tmp/itm_agent.tar.gz"
+        src: "/tmp/itm_agent.zip"
         dest: "{{ itm_extract_dir }}"
         remote_src: yes
 
