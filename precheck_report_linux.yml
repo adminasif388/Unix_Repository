@@ -86,11 +86,7 @@
     shell: cat /etc/inittab || true
     register: inittab_out
     ignore_errors: yes
-
-  - name: /etc/hosts again (duplicate safe)
-    shell: cat /etc/hosts
-    register: hosts2_out
-
+    
   # =========================
   # DISK / LVM
   # =========================
