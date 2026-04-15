@@ -1,85 +1,74 @@
 ---
-- name: Install and Start ITM Agent on Linux & ensure services running
+- name: Install Symantec Endpoint Protection on Linux
   hosts: all
   become: yes
   gather_facts: yes
 
   vars:
-    itm_install_dir: "/opt/IBM/ITM"
-    itm_package_src: "/tmp/itm_agent.zip"
-    itm_extract_dir: "/tmp/itm_agent"
+    sep_package_src: "/tmp/sep_linux_client.zip"   # change to your package path
+    sep_extract_dir: "/tmp/sep_client"
+    sep_installer: "install.sh"
 
   tasks:
 
     # ----------------------------
-    # Ensure extract directory exists
+    # Copy SEP package
     # ----------------------------
-    - name: Create extract directory
-      ansible.builtin.file:
-        path: "{{ itm_extract_dir }}"
-        state: directory
-        mode: '0755'
-
-    # ----------------------------
-    # Copy ITM package
-    # ----------------------------
-    - name: Copy ITM agent package to target
+    - name: Copy SEP package to target
       ansible.builtin.copy:
-        src: "{{ itm_package_src }}"
-        dest: "{{ itm_package_src }}"
-        mode: '0644'
+        src: "{{ sep_package_src }}"
+        dest: "/tmp/sep_linux_client.zip"
 
     # ----------------------------
     # Extract package
     # ----------------------------
-    - name: Extract ITM package
+    - name: Extract SEP package
       ansible.builtin.unarchive:
-        src: "{{ itm_package_src }}"
-        dest: "{{ itm_extract_dir }}"
+        src: "/tmp/sep_linux_client.zip"
+        dest: "{{ sep_extract_dir }}"
         remote_src: yes
 
     # ----------------------------
-    # Install ITM agent
+    # Give execute permission
     # ----------------------------
-    - name: Run ITM silent installation
-      ansible.builtin.shell: ./install.sh -silent
+    - name: Make installer executable
+      ansible.builtin.file:
+        path: "{{ sep_extract_dir }}/{{ sep_installer }}"
+        mode: '0755'
+
+    # ----------------------------
+    # Install SEP silently
+    # ----------------------------
+    - name: Install SEP client
+      ansible.builtin.shell: |
+        cd {{ sep_extract_dir }}
+        ./{{ sep_installer }} -i
       args:
-        chdir: "{{ itm_extract_dir }}"
-        creates: "{{ itm_install_dir }}/bin/itmcmd"
+        creates: /opt/Symantec
       register: install_output
 
     - name: Show install output
       ansible.builtin.debug:
         var: install_output.stdout_lines
-      when: install_output is defined
 
     # ----------------------------
-    # Configure ITM agent (optional)
+    # Start SEP service
     # ----------------------------
-    - name: Configure ITM agent (silent config)
-      ansible.builtin.shell: "{{ itm_install_dir }}/bin/itmcmd config -A"
-      register: config_output
+    - name: Start SEP service
+      ansible.builtin.systemd:
+        name: rtvscand
+        state: started
+        enabled: yes
       ignore_errors: yes
-      when: itm_install_dir is exists
 
     # ----------------------------
-    # Start ITM agent
+    # Verify service status
     # ----------------------------
-    - name: Start ITM agent
-      ansible.builtin.shell: "{{ itm_install_dir }}/bin/itmcmd agent start"
-      register: start_output
-      when: itm_install_dir is exists
+    - name: Check SEP service status
+      ansible.builtin.command: systemctl is-active rtvscand
+      register: sep_status
+      ignore_errors: yes
 
-    # ----------------------------
-    # Check ITM agent status
-    # ----------------------------
-    - name: Check ITM agent status
-      ansible.builtin.shell: "{{ itm_install_dir }}/bin/itmcmd agent status"
-      register: status_output
-      changed_when: false
-      when: itm_install_dir is exists
-
-    - name: Show ITM agent status
+    - name: Show SEP status
       ansible.builtin.debug:
-        var: status_output.stdout_lines
-      when: status_output is defined
+        msg: "SEP service is {{ sep_status.stdout }}"
