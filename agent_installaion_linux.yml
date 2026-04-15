@@ -6,9 +6,9 @@
 
   vars:
     itm_install_dir: "/opt/IBM/ITM"
-    itm_package_src: "/tmp/itm_agent.tar.gz"   # Source package path (copy from control node)
+    itm_package_src: "/tmp/itm_agent.tar.gz"  
     itm_extract_dir: "/tmp/itm_agent"
-    itm_agent_service: "itmcmd"                # ITM command tool
+    itm_agent_service: "itmcmd"               
 
   tasks:
 
