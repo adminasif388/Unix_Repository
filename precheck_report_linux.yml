@@ -1,240 +1,228 @@
 ---
-- name: Linux Full System Audit Report
+- name: Linux System Audit Playbook
   hosts: all
   become: yes
   gather_facts: yes
 
   vars:
-    report_file: "/tmp/linux_full_audit_report.txt"
+    output_file: /tmp/linux_audit_report.txt
 
   tasks:
 
-  # =========================
-  # INIT REPORT
-  # =========================
-
-  - name: Initialize report
+  - name: Create/clear report file
     copy:
-      dest: "{{ report_file }}"
-      content: |
-        ======================================
-        LINUX FULL SYSTEM AUDIT REPORT
-        ======================================
-        Host: {{ ansible_hostname }}
-        Date: {{ ansible_date_time.date }}
-        ======================================
+      dest: "{{ output_file }}"
+      content: "Linux Audit Report\n====================\n\n"
 
-  # =========================
-  # SYSTEM BASIC INFO
-  # =========================
+  - name: Collect hostname
+    shell: hostname
+    register: hostname
 
-  - name: Uptime
+  - name: Collect uptime
     shell: uptime
-    register: uptime_out
+    register: uptime
 
-  - name: Timezone
-    shell: timedatectl
-    register: tz_out
-    ignore_errors: yes
+  - name: Collect date
+    shell: date
+    register: date
 
-  - name: Add system info
-    lineinfile:
-      path: "{{ report_file }}"
-      line: |
-        UPTIME:
-        {{ uptime_out.stdout }}
+  - name: Collect timezone
+    shell: timedatectl 2>/dev/null || cat /etc/timezone
+    register: timezone
 
-        TIMEZONE:
-        {{ tz_out.stdout | default('N/A') }}
-
-  # =========================
-  # TIME SYNC
-  # =========================
-
-  - name: Time sync status
-    shell: timedatectl show | grep -E "NTPSynchronized|NTP"
-    register: timesync
-    ignore_errors: yes
-
-  - name: Add time sync
-    lineinfile:
-      path: "{{ report_file }}"
-      line: "TIME SYNC:\n{{ timesync.stdout }}"
-
-  # =========================
-  # CONFIG FILES
-  # =========================
-
-  - name: /etc/hosts
+  - name: Collect /etc/hosts
     shell: cat /etc/hosts
-    register: hosts_out
+    register: etc_hosts
 
-  - name: /etc/sudoers (safe view)
-    shell: cat /etc/sudoers | grep -v '^#' || true
-    register: sudo_out
-    ignore_errors: yes
-
-  - name: /etc/resolv.conf
-    shell: cat /etc/resolv.conf
-    register: resolv_out
-
-  - name: /etc/fstab
+  - name: Collect /etc/fstab
     shell: cat /etc/fstab
-    register: fstab_out
+    register: etc_fstab
 
-  - name: /etc/inittab (legacy systems)
-    shell: cat /etc/inittab || true
-    register: inittab_out
-    ignore_errors: yes
-    
-  # =========================
-  # DISK / LVM
-  # =========================
+  - name: Collect IP configuration
+    shell: ip a || ifconfig -a
+    register: ifcfg
 
-  - name: df -hTP
+  - name: Collect routing table
+    shell: ip r || netstat -rn
+    register: route
+
+  - name: Collect DNS config
+    shell: cat /etc/resolv.conf
+    register: resolv
+
+  - name: Collect sysctl config
+    shell: cat /etc/sysctl.conf
+    register: sysctl
+
+  - name: Collect mounts
+    shell: mount
+    register: mount
+
+  - name: Collect disk usage (df -hTP)
     shell: df -hTP
-    register: df_out
+    register: df_hTP
 
-  - name: vgdisplay
-    shell: vgdisplay -v
-    register: vg_out
-    ignore_errors: yes
+  - name: Collect disk usage (df -m)
+    shell: df -m
+    register: df_m
 
-  # =========================
-  # SYSTEM INFO
-  # =========================
+  - name: Collect block devices
+    shell: lsblk
+    register: lsblk
 
-  - name: uname -a
+  - name: Collect fdisk output
+    shell: fdisk -l
+    register: fdisk
+
+  - name: Collect LVM display
+    shell: lvdisplay || true
+    register: lvm
+
+  - name: Collect memory usage
+    shell: free -h
+    register: memory
+
+  - name: Collect kernel version
+    shell: uname -r
+    register: kernel
+
+  - name: Collect system info
     shell: uname -a
-    register: uname_a
+    register: uname
 
-  - name: OS release
-    shell: cat /etc/redhat-release || cat /etc/os-release
-    register: os_out
-    ignore_errors: yes
-
-  - name: runlevel
-    shell: runlevel
-    register: runlevel_out
-    ignore_errors: yes
-
-  # =========================
-  # PACKAGES
-  # =========================
-
-  - name: rpm packages
+  - name: Installed packages
     shell: rpm -qa
-    register: rpm_out
-    ignore_errors: yes
+    register: rpm_qa
 
-  # =========================
-  # PROCESS CHECKS
-  # =========================
+  - name: Installed packages with last install info
+    shell: rpm -qa --last | head
+    register: rpm_last
 
-  - name: ps -ef
+  - name: Network sockets (listening TCP/UDP)
+    shell: netstat -lnup || ss -lnup
+    register: net_udp
+
+  - name: Network sockets (TCP listening)
+    shell: netstat -lntp || ss -lntp
+    register: net_tcp
+
+  - name: Network routes
+    shell: netstat -rn || ip r
+    register: net_routes
+
+  - name: IPTables rules
+    shell: iptables -L -n -v
+    register: iptables
+
+  - name: List loaded modules
+    shell: lsmod
+    register: lsmod
+
+  - name: Module info (sample kernel module)
+    shell: modinfo ext4 || true
+    register: modinfo
+
+  - name: Process memory usage
+    shell: ps -eo pid,vsz,rss,cmd --sort=-vsz | head
+    register: ps_vsz
+
+  - name: Process list
     shell: ps -ef
-    register: ps_out
+    register: ps_ef
 
-  # =========================
-  # NETWORK INFO
-  # =========================
+  - name: CPU info
+    shell: lscpu || cat /proc/cpuinfo
+    register: cpu
 
-  - name: ifconfig -a
-    shell: ifconfig -a
-    register: ifcfg_out
-    ignore_errors: yes
-
-  - name: ethtool (interfaces summary)
-    shell: "for i in $(ls /sys/class/net); do echo $i; ethtool $i 2>/dev/null || true; echo '---'; done"
-    register: ethtool_out
-    ignore_errors: yes
-
-  # =========================
-  # CRON
-  # =========================
-
-  - name: crontab -l
-    shell: crontab -l || true
-    register: cron_out
-    ignore_errors: yes
-
-  # =========================
-  # WRITE REPORT
-  # =========================
-
-  - name: Append all collected data
+  - name: Write all outputs to report file
     copy:
-      dest: "{{ report_file }}"
+      dest: "{{ output_file }}"
       content: |
-        ======================================
-        SYSTEM AUDIT DETAILS
-        ======================================
+        ===== SYSTEM AUDIT REPORT =====
+
+        HOSTNAME:
+        {{ hostname.stdout }}
 
         UPTIME:
-        {{ uptime_out.stdout }}
+        {{ uptime.stdout }}
+
+        DATE:
+        {{ date.stdout }}
 
         TIMEZONE:
-        {{ tz_out.stdout | default('N/A') }}
+        {{ timezone.stdout }}
 
-        TIME SYNC:
-        {{ timesync.stdout }}
+        /etc/hosts:
+        {{ etc_hosts.stdout }}
+
+        /etc/fstab:
+        {{ etc_fstab.stdout }}
+
+        NETWORK (IP CONFIG):
+        {{ ifcfg.stdout }}
+
+        ROUTES:
+        {{ route.stdout }}
+
+        DNS:
+        {{ resolv.stdout }}
+
+        SYSCTL:
+        {{ sysctl.stdout }}
+
+        MOUNT:
+        {{ mount.stdout }}
 
         DF -hTP:
-        {{ df_out.stdout }}
+        {{ df_hTP.stdout }}
 
-        VGDISPLAY:
-        {{ vg_out.stdout | default('N/A') }}
+        DF -m:
+        {{ df_m.stdout }}
 
-        RPM PACKAGES:
-        {{ rpm_out.stdout | default('N/A') }}
+        LVM:
+        {{ lvm.stdout }}
 
-        PS -EF:
-        {{ ps_out.stdout }}
+        FDISK:
+        {{ fdisk.stdout }}
 
-        IFCONFIG:
-        {{ ifcfg_out.stdout | default('N/A') }}
+        MEMORY:
+        {{ memory.stdout }}
 
-        ETHTOOL:
-        {{ ethtool_out.stdout | default('N/A') }}
-
-        CRONTAB:
-        {{ cron_out.stdout }}
+        KERNEL:
+        {{ kernel.stdout }}
 
         UNAME:
-        {{ uname_a.stdout }}
+        {{ uname.stdout }}
 
-        OS RELEASE:
-        {{ os_out.stdout }}
+        RPM PACKAGES:
+        {{ rpm_qa.stdout }}
 
-        RUNLEVEL:
-        {{ runlevel_out.stdout | default('N/A') }}
+        LAST RPM:
+        {{ rpm_last.stdout }}
 
-        FSTAB:
-        {{ fstab_out.stdout }}
+        TCP SOCKETS:
+        {{ net_tcp.stdout }}
 
-        HOSTS:
-        {{ hosts_out.stdout }}
+        UDP SOCKETS:
+        {{ net_udp.stdout }}
 
-        SUDOERS:
-        {{ sudo_out.stdout | default('N/A') }}
+        ROUTES (NETSTAT):
+        {{ net_routes.stdout }}
 
-        RESOLV.CONF:
-        {{ resolv_out.stdout }}
+        IPTABLES:
+        {{ iptables.stdout }}
 
-        INITTAB:
-        {{ inittab_out.stdout | default('N/A') }}
+        MODULES:
+        {{ lsmod.stdout }}
 
-  # =========================
-  # READ REPORT
-  # =========================
+        MODINFO:
+        {{ modinfo.stdout }}
 
-  - name: Read report
-    slurp:
-      src: "{{ report_file }}"
-    register: report_data
+        PS VSZ TOP:
+        {{ ps_vsz.stdout }}
 
-  - name: Set report content
-    set_fact:
-      report_content: "{{ report_data.content | b64decode }}"
+        PS -EF:
+        {{ ps_ef.stdout }}
 
- 
+        CPU INFO:
+        {{ cpu.stdout }}
