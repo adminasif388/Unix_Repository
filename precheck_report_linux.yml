@@ -226,3 +226,9 @@
 
         CPU INFO:
         {{ cpu.stdout }}
+
+        
+- name: Save audit report to file
+  copy:
+    dest: "{{ output_file }}"
+    content: "{{ audit_report }}"
