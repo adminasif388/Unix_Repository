@@ -1,4 +1,92 @@
 ---
+- name: Linux Server Precheck Playbook
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+
+    - name: Show basic system information
+      debug:
+        msg:
+          - "Hostname: {{ ansible_hostname }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Kernel: {{ ansible_kernel }}"
+          - "Uptime: {{ ansible_uptime_seconds }} seconds"
+
+    - name: Check CPU count
+      debug:
+        msg: "CPU cores: {{ ansible_processor_vcpus }}"
+
+    - name: Check memory
+      debug:
+        msg:
+          - "Total Memory (MB): {{ ansible_memtotal_mb }}"
+          - "Free Memory (MB): {{ ansible_memfree_mb }}"
+
+    - name: Check disk space on root (/)
+      shell: df -h /
+      register: disk_usage
+
+    - name: Show root disk usage
+      debug:
+        var: disk_usage.stdout_lines
+
+    - name: Fail if root disk is less than 20% free
+      shell: df / | awk 'NR==2 {print $5}' | sed 's/%//'
+      register: root_disk
+      changed_when: false
+
+    - name: Validate disk threshold
+      fail:
+        msg: "Root disk usage is too high (>80%)"
+      when: root_disk.stdout|int > 80
+
+    - name: Check if required packages exist (curl, unzip)
+      package_facts:
+        manager: auto
+
+    - name: Verify curl is installed
+      fail:
+        msg: "curl is NOT installed"
+      when: "'curl' not in ansible_facts.packages"
+
+    - name: Verify unzip is installed
+      fail:
+        msg: "unzip is NOT installed"
+      when: "'unzip' not in ansible_facts.packages"
+
+    - name: Check if /tmp has enough space
+      shell: df -h /tmp
+      register: tmp_space
+
+    - name: Show /tmp space
+      debug:
+        var: tmp_space.stdout_lines
+
+    - name: Check network connectivity (DNS + internet)
+      shell: ping -c 2 8.8.8.8
+      register: ping_result
+      ignore_errors: yes
+
+    - name: Fail if network is down
+      fail:
+        msg: "Network connectivity issue detected"
+      when: ping_result.rc != 0
+
+    - name: Check if SSH service is running
+      shell: systemctl is-active sshd
+      register: ssh_status
+      ignore_errors: yes
+
+    - name: Show SSH status
+      debug:
+        msg: "SSH Service: {{ ssh_status.stdout }}"
+
+    - name: Validate SSH service
+      fail:
+        msg: "SSH service is not running"
+      when: ssh_status.stdout != "active"---
 - name: Pre-check multiple Linux servers
   hosts: all
   gather_facts: yes
