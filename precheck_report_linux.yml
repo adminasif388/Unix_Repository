@@ -1,30 +1,36 @@
 ---
-- name: Linux Precheck + Postcheck with Report & Email
+- name: Linux Server Precheck with Report and Email
   hosts: all
   become: yes
   gather_facts: yes
 
   vars:
-    report_file: "/tmp/linux_validation_report.txt"
+    report_file: "/tmp/linux_precheck_report.txt"
     mail_to: "asifali388@gmail.com"
-    mail_subject: "Linux Server Validation Report"
+    mail_subject: "Linux Precheck Report"
 
   tasks:
 
   # =========================
-  # PRECHECK SECTION
+  # CREATE REPORT HEADER
   # =========================
 
-  - name: Start report file
+  - name: Initialize report file
     copy:
       dest: "{{ report_file }}"
       content: |
-        ===== Linux Validation Report =====
+        ================================
+        Linux Precheck Report
+        ================================
         Date: {{ ansible_date_time.date }}
         Host: {{ ansible_hostname }}
-        ===================================
+        ================================
 
-  - name: Collect system info
+  # =========================
+  # SYSTEM INFO
+  # =========================
+
+  - name: Add system information
     lineinfile:
       path: "{{ report_file }}"
       line: |
@@ -33,23 +39,35 @@
         CPU: {{ ansible_processor_vcpus }} cores
         Memory: {{ ansible_memtotal_mb }} MB
 
+  # =========================
+  # DISK CHECK
+  # =========================
+
   - name: Check disk usage
     shell: df -h /
     register: disk
 
-  - name: Append disk info
+  - name: Append disk usage
     lineinfile:
       path: "{{ report_file }}"
       line: "{{ disk.stdout }}"
+
+  # =========================
+  # MEMORY CHECK
+  # =========================
 
   - name: Check memory usage
     shell: free -m
     register: mem
 
-  - name: Append memory info
+  - name: Append memory usage
     lineinfile:
       path: "{{ report_file }}"
       line: "{{ mem.stdout }}"
+
+  # =========================
+  # NETWORK CHECK
+  # =========================
 
   - name: Check network connectivity
     shell: ping -c 2 8.8.8.8
@@ -62,17 +80,22 @@
       line: "Network: {{ 'UP' if net.rc == 0 else 'DOWN' }}"
 
   # =========================
-  # POST VALIDATION SECTION
+  # SSH SERVICE CHECK
   # =========================
 
   - name: Check SSH service
     shell: systemctl is-active sshd
     register: ssh
+    ignore_errors: yes
 
   - name: Append SSH status
     lineinfile:
       path: "{{ report_file }}"
-      line: "SSH Service: {{ ssh.stdout }}"
+      line: "SSH Service: {{ ssh.stdout | default('unknown') }}"
+
+  # =========================
+  # UPTIME CHECK
+  # =========================
 
   - name: Check uptime
     shell: uptime
@@ -81,238 +104,29 @@
   - name: Append uptime
     lineinfile:
       path: "{{ report_file }}"
-      line: "Uptime: {{ up.stdout }}"
+      line: "{{ up.stdout }}"
 
   # =========================
-  # READ FINAL REPORT
+  # READ REPORT
   # =========================
 
   - name: Read report file
     slurp:
       src: "{{ report_file }}"
-    register: final_report
+    register: report
 
-  - name: Convert report to text
+  - name: Set report content
     set_fact:
-      report_content: "{{ final_report.content | b64decode }}"
+      report_content: "{{ report.content | b64decode }}"
 
   # =========================
   # SEND EMAIL
   # =========================
 
-  - name: Send validation report via email
+  - name: Send report via email
     mail:
       host: vm01
       port: 25
       to: "{{ mail_to }}"
       subject: "{{ mail_subject }}"
-      body: "{{ report_content }}"---
-- name: Linux Server Precheck Playbook
-  hosts: all
-  become: yes
-  gather_facts: yes
-
-  tasks:
-
-    - name: Show basic system information
-      debug:
-        msg:
-          - "Hostname: {{ ansible_hostname }}"
-          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
-          - "Kernel: {{ ansible_kernel }}"
-          - "Uptime: {{ ansible_uptime_seconds }} seconds"
-
-    - name: Check CPU count
-      debug:
-        msg: "CPU cores: {{ ansible_processor_vcpus }}"
-
-    - name: Check memory
-      debug:
-        msg:
-          - "Total Memory (MB): {{ ansible_memtotal_mb }}"
-          - "Free Memory (MB): {{ ansible_memfree_mb }}"
-
-    - name: Check disk space on root (/)
-      shell: df -h /
-      register: disk_usage
-
-    - name: Show root disk usage
-      debug:
-        var: disk_usage.stdout_lines
-
-    - name: Fail if root disk is less than 20% free
-      shell: df / | awk 'NR==2 {print $5}' | sed 's/%//'
-      register: root_disk
-      changed_when: false
-
-    - name: Validate disk threshold
-      fail:
-        msg: "Root disk usage is too high (>80%)"
-      when: root_disk.stdout|int > 80
-
-    - name: Check if required packages exist (curl, unzip)
-      package_facts:
-        manager: auto
-
-    - name: Verify curl is installed
-      fail:
-        msg: "curl is NOT installed"
-      when: "'curl' not in ansible_facts.packages"
-
-    - name: Verify unzip is installed
-      fail:
-        msg: "unzip is NOT installed"
-      when: "'unzip' not in ansible_facts.packages"
-
-    - name: Check if /tmp has enough space
-      shell: df -h /tmp
-      register: tmp_space
-
-    - name: Show /tmp space
-      debug:
-        var: tmp_space.stdout_lines
-
-    - name: Check network connectivity (DNS + internet)
-      shell: ping -c 2 8.8.8.8
-      register: ping_result
-      ignore_errors: yes
-
-    - name: Fail if network is down
-      fail:
-        msg: "Network connectivity issue detected"
-      when: ping_result.rc != 0
-
-    - name: Check if SSH service is running
-      shell: systemctl is-active sshd
-      register: ssh_status
-      ignore_errors: yes
-
-    - name: Show SSH status
-      debug:
-        msg: "SSH Service: {{ ssh_status.stdout }}"
-
-    - name: Validate SSH service
-      fail:
-        msg: "SSH service is not running"
-      when: ssh_status.stdout != "active"---
-- name: Pre-check multiple Linux servers
-  hosts: all
-  gather_facts: yes
-  become: yes
-
-  vars:
-    required_services:
-      - sshd
-      - NetworkManager
-      - chronyd
-
-  tasks:
-
-    - name: Check if host is reachable via Ansible ping
-      ansible.builtin.ping:
-      register: ping_result
-      ignore_errors: yes
-
-    - name: Report ping result
-      ansible.builtin.debug:
-        msg: "{{ inventory_hostname }} is reachable"
-      when: ping_result.ping is defined
-
-    - name: Check available disk space
-      ansible.builtin.command: df -h /
-      register: disk_result
-
-    - name: Show disk usage
-      ansible.builtin.debug:
-        var: disk_result.stdout_lines
-
-    - name: Check memory usage
-      ansible.builtin.command: free -m
-      register: mem_result
-
-    - name: Show memory info
-      ansible.builtin.debug:
-        var: mem_result.stdout_lines
-
-    - name: Check CPU load
-      ansible.builtin.command: uptime
-      register: cpu_result
-
-    - name: Show CPU load
-      ansible.builtin.debug:
-        var: cpu_result.stdout_lines
-
-    - name: Check required services
-      ansible.builtin.systemd:
-        name: "{{ item }}"
-        state: started
-      loop: "{{ required_services }}"
-      register: service_status
-      ignore_errors: yes
-
-    - name: Display service check results
-      ansible.builtin.debug:
-        var: service_status.results
-
-    - name: Check open ports 22 and 80
-      ansible.builtin.shell: "ss -tulnp | grep -E ':22|:80'"
-      register: port_check
-      ignore_errors: yes
-
-    - name: Display port check
-      ansible.builtin.debug:
-        var: port_check.stdout_lines
-
-    - name: Check system uptime
-      ansible.builtin.command: uptime
-      register: uptime_result
-
-    - name: Show uptime result
-      ansible.builtin.debug:
-        var: uptime_result.stdout_lines   
-
-    - name: Build final report
-      set_fact:
-        final_report: |
-          ==============================
-          SERVER PRE-CHECK REPORT
-          ==============================
-
-          Host: {{ inventory_hostname }}
-
-          --- PING ---
-          {{ ping_result.ping | default('FAILED') }}
-
-          --- DISK ---
-          {{ disk_result.stdout }}
-
-          --- MEMORY ---
-          {{ mem_result.stdout }}
-
-          --- CPU LOAD ---
-          {{ cpu_result.stdout }}
-
-          --- UPTIME ---
-          {{ uptime_result.stdout }}
-
-          --- SERVICES ---
-          {{ service_status.results | to_nice_yaml }}
-
-          --- PORT CHECK ---
-          {{ port_check.stdout | default('No output / ports not open') }}
-
-    - name: Ensure reports directory exists
-      file:
-        path: /tmp
-        state: directory
-      delegate_to: vm01
-
-    - name: Save report to file
-      copy:
-        content: "{{ final_report }}"
-        dest: "/tmp/{{ inventory_hostname }}_health_check_report.txt"
-      delegate_to: vm01
-
-    - name: Show report location
-      debug:
-        msg: "Report saved for {{ inventory_hostname }} in /tmp/"  
+      body: "{{ report_content }}"
