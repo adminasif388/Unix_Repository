@@ -1,8 +1,8 @@
 ---
 - name: Install and Start ITM Agent on Linux & ensure services running
   hosts: all
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   vars:
     itm_install_dir: "/opt/IBM/ITM"
