@@ -1,234 +1,202 @@
 ---
-- name: Linux System Audit Playbook
+- name: Linux Full System Audit
   hosts: all
   become: yes
   gather_facts: yes
 
   vars:
-    output_file: /tmp/linux_audit_report.txt
+    report_file: /tmp/linux_audit_report.txt
 
   tasks:
 
-  - name: Create/clear report file
-    copy:
-      dest: "{{ output_file }}"
-      content: "Linux Audit Report\n====================\n\n"
+    - name: Initialize report file
+      copy:
+        dest: "{{ report_file }}"
+        content: |
+          ============================
+          LINUX SYSTEM AUDIT REPORT
+          ============================
 
-  - name: Collect hostname
-    shell: hostname
-    register: hostname
+    - name: Collect system info
+      shell: |
+        echo "HOSTNAME: $(hostname)"
+        echo "UPTIME: $(uptime)"
+        echo "DATE: $(date)"
+        echo "TIMEZONE: $(timedatectl 2>/dev/null | grep 'Time zone' || cat /etc/timezone 2>/dev/null)"
+      register: sys_info
 
-  - name: Collect uptime
-    shell: uptime
-    register: uptime
+    - name: /etc/hosts
+      shell: cat /etc/hosts
+      register: etc_hosts
 
-  - name: Collect date
-    shell: date
-    register: date
+    - name: /etc/fstab
+      shell: cat /etc/fstab
+      register: etc_fstab
 
-  - name: Collect timezone
-    shell: timedatectl 2>/dev/null || cat /etc/timezone
-    register: timezone
+    - name: Network config
+      shell: ip a || ifconfig -a
+      register: ifcfg
 
-  - name: Collect /etc/hosts
-    shell: cat /etc/hosts
-    register: etc_hosts
+    - name: DNS config
+      shell: cat /etc/resolv.conf
+      register: resolv
 
-  - name: Collect /etc/fstab
-    shell: cat /etc/fstab
-    register: etc_fstab
+    - name: sysctl config
+      shell: cat /etc/sysctl.conf
+      register: sysctl
 
-  - name: Collect IP configuration
-    shell: ip a || ifconfig -a
-    register: ifcfg
+    - name: Mount points
+      shell: mount
+      register: mount
 
-  - name: Collect routing table
-    shell: ip r || netstat -rn
-    register: route
+    - name: Disk usage (human)
+      shell: df -hTP
+      register: df_h
 
-  - name: Collect DNS config
-    shell: cat /etc/resolv.conf
-    register: resolv
+    - name: Disk usage (MB)
+      shell: df -m
+      register: df_m
 
-  - name: Collect sysctl config
-    shell: cat /etc/sysctl.conf
-    register: sysctl
+    - name: Block devices
+      shell: lsblk
+      register: lsblk
 
-  - name: Collect mounts
-    shell: mount
-    register: mount
+    - name: FDISK
+      shell: fdisk -l
+      register: fdisk
 
-  - name: Collect disk usage (df -hTP)
-    shell: df -hTP
-    register: df_hTP
+    - name: LVM display
+      shell: lvdisplay || true
+      register: lvm
 
-  - name: Collect disk usage (df -m)
-    shell: df -m
-    register: df_m
+    - name: Memory
+      shell: free -h
+      register: memory
 
-  - name: Collect block devices
-    shell: lsblk
-    register: lsblk
+    - name: Kernel info
+      shell: uname -a && uname -r
+      register: kernel
 
-  - name: Collect fdisk output
-    shell: fdisk -l
-    register: fdisk
+    - name: Installed packages
+      shell: rpm -qa
+      register: rpm_qa
 
-  - name: Collect LVM display
-    shell: lvdisplay || true
-    register: lvm
+    - name: Last installed packages
+      shell: rpm -qa --last | head
+      register: rpm_last
 
-  - name: Collect memory usage
-    shell: free -h
-    register: memory
+    - name: Network sockets TCP/UDP
+      shell: netstat -lnup || ss -lnup
+      register: net_udp
 
-  - name: Collect kernel version
-    shell: uname -r
-    register: kernel
+    - name: Network TCP listening
+      shell: netstat -lntp || ss -lntp
+      register: net_tcp
 
-  - name: Collect system info
-    shell: uname -a
-    register: uname
+    - name: Routing table
+      shell: netstat -rn || ip r
+      register: routes
 
-  - name: Installed packages
-    shell: rpm -qa
-    register: rpm_qa
+    - name: Firewall rules
+      shell: iptables -L -n -v
+      register: iptables
 
-  - name: Installed packages with last install info
-    shell: rpm -qa --last | head
-    register: rpm_last
+    - name: Modules
+      shell: lsmod
+      register: lsmod
 
-  - name: Network sockets (listening TCP/UDP)
-    shell: netstat -lnup || ss -lnup
-    register: net_udp
+    - name: Module info
+      shell: modinfo ext4 || true
+      register: modinfo
 
-  - name: Network sockets (TCP listening)
-    shell: netstat -lntp || ss -lntp
-    register: net_tcp
+    - name: CPU / memory processes
+      shell: ps -eo pid,vsz,rss,cmd --sort=-vsz | head
+      register: ps_vsz
 
-  - name: Network routes
-    shell: netstat -rn || ip r
-    register: net_routes
+    - name: Full process list
+      shell: ps -ef
+      register: ps_ef
 
-  - name: IPTables rules
-    shell: iptables -L -n -v
-    register: iptables
+    - name: Cron jobs
+      shell: crontab -l || true
+      register: cron
 
-  - name: List loaded modules
-    shell: lsmod
-    register: lsmod
+    - name: Write final report
+      copy:
+        dest: "{{ report_file }}"
+        content: |
+          ============================
+          LINUX SYSTEM AUDIT REPORT
+          ============================
 
-  - name: Module info (sample kernel module)
-    shell: modinfo ext4 || true
-    register: modinfo
+          SYSTEM INFO:
+          {{ sys_info.stdout }}
 
-  - name: Process memory usage
-    shell: ps -eo pid,vsz,rss,cmd --sort=-vsz | head
-    register: ps_vsz
+          /etc/hosts:
+          {{ etc_hosts.stdout }}
 
-  - name: Process list
-    shell: ps -ef
-    register: ps_ef
+          /etc/fstab:
+          {{ etc_fstab.stdout }}
 
-  - name: CPU info
-    shell: lscpu || cat /proc/cpuinfo
-    register: cpu
+          NETWORK CONFIG:
+          {{ ifcfg.stdout }}
 
-  - name: Write all outputs to report file
-    copy:
-      dest: "{{ output_file }}"
-      content: |
-        ===== SYSTEM AUDIT REPORT =====
+          DNS:
+          {{ resolv.stdout }}
 
-        HOSTNAME:
-        {{ hostname.stdout }}
+          SYSCTL:
+          {{ sysctl.stdout }}
 
-        UPTIME:
-        {{ uptime.stdout }}
+          MOUNTS:
+          {{ mount.stdout }}
 
-        DATE:
-        {{ date.stdout }}
+          DF -hTP:
+          {{ df_h.stdout }}
 
-        TIMEZONE:
-        {{ timezone.stdout }}
+          DF -m:
+          {{ df_m.stdout }}
 
-        /etc/hosts:
-        {{ etc_hosts.stdout }}
+          LVM:
+          {{ lvm.stdout }}
 
-        /etc/fstab:
-        {{ etc_fstab.stdout }}
+          FDISK:
+          {{ fdisk.stdout }}
 
-        NETWORK (IP CONFIG):
-        {{ ifcfg.stdout }}
+          MEMORY:
+          {{ memory.stdout }}
 
-        ROUTES:
-        {{ route.stdout }}
+          KERNEL:
+          {{ kernel.stdout }}
 
-        DNS:
-        {{ resolv.stdout }}
+          RPM PACKAGES:
+          {{ rpm_qa.stdout }}
 
-        SYSCTL:
-        {{ sysctl.stdout }}
+          LAST RPM:
+          {{ rpm_last.stdout }}
 
-        MOUNT:
-        {{ mount.stdout }}
+          TCP SESSIONS:
+          {{ net_tcp.stdout }}
 
-        DF -hTP:
-        {{ df_hTP.stdout }}
+          UDP SESSIONS:
+          {{ net_udp.stdout }}
 
-        DF -m:
-        {{ df_m.stdout }}
+          ROUTES:
+          {{ routes.stdout }}
 
-        LVM:
-        {{ lvm.stdout }}
+          IPTABLES:
+          {{ iptables.stdout }}
 
-        FDISK:
-        {{ fdisk.stdout }}
+          MODULES:
+          {{ lsmod.stdout }}
 
-        MEMORY:
-        {{ memory.stdout }}
+          MODINFO:
+          {{ modinfo.stdout }}
 
-        KERNEL:
-        {{ kernel.stdout }}
+          TOP PROCESSES:
+          {{ ps_vsz.stdout }}
 
-        UNAME:
-        {{ uname.stdout }}
+          PROCESSES:
+          {{ ps_ef.stdout }}
 
-        RPM PACKAGES:
-        {{ rpm_qa.stdout }}
-
-        LAST RPM:
-        {{ rpm_last.stdout }}
-
-        TCP SOCKETS:
-        {{ net_tcp.stdout }}
-
-        UDP SOCKETS:
-        {{ net_udp.stdout }}
-
-        ROUTES (NETSTAT):
-        {{ net_routes.stdout }}
-
-        IPTABLES:
-        {{ iptables.stdout }}
-
-        MODULES:
-        {{ lsmod.stdout }}
-
-        MODINFO:
-        {{ modinfo.stdout }}
-
-        PS VSZ TOP:
-        {{ ps_vsz.stdout }}
-
-        PS -EF:
-        {{ ps_ef.stdout }}
-
-        CPU INFO:
-        {{ cpu.stdout }}
-
-        
-- name: Save audit report to file
-  copy:
-    dest: "{{ output_file }}"
-    content: "{{ audit_report }}"
+          CRON:
+          {{ cron.stdout }}
