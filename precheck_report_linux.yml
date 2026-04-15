@@ -1,295 +1,254 @@
 ---
-- name: Linux System Health Report + Email
+- name: Linux Full System Audit Report
   hosts: all
   become: yes
   gather_facts: yes
 
   vars:
-    report_file: "/tmp/linux_system_report.txt"
-    mail_to: "asifali388@gmail.com"
-    mail_subject: "Linux System Health Report"
+    report_file: "/tmp/linux_full_audit_report.txt"
 
   tasks:
 
   # =========================
-  # CREATE REPORT HEADER
+  # INIT REPORT
   # =========================
 
-  - name: Initialize report file
+  - name: Initialize report
     copy:
       dest: "{{ report_file }}"
       content: |
-        =====================================
-        Linux System Health Report
-        =====================================
+        ======================================
+        LINUX FULL SYSTEM AUDIT REPORT
+        ======================================
         Host: {{ ansible_hostname }}
         Date: {{ ansible_date_time.date }}
-        =====================================
+        ======================================
 
   # =========================
-  # BASIC SYSTEM COMMANDS
+  # SYSTEM BASIC INFO
   # =========================
 
-  - name: Collect uptime
+  - name: Uptime
     shell: uptime
     register: uptime_out
 
-  - name: Add uptime to report
+  - name: Timezone
+    shell: timedatectl
+    register: tz_out
+    ignore_errors: yes
+
+  - name: Add system info
     lineinfile:
       path: "{{ report_file }}"
-      line: "UPTIME:\n{{ uptime_out.stdout }}"
+      line: |
+        UPTIME:
+        {{ uptime_out.stdout }}
 
-  - name: Collect date
-    shell: date
-    register: date_out
-
-  - name: Add date to report
-    lineinfile:
-      path: "{{ report_file }}"
-      line: "DATE:\n{{ date_out.stdout }}"
+        TIMEZONE:
+        {{ tz_out.stdout | default('N/A') }}
 
   # =========================
-  # DISK & MEMORY
+  # TIME SYNC
   # =========================
 
-  - name: Disk usage
-    shell: df -hTP
-    register: df_out
+  - name: Time sync status
+    shell: timedatectl show | grep -E "NTPSynchronized|NTP"
+    register: timesync
+    ignore_errors: yes
 
-  - name: Add disk usage
+  - name: Add time sync
     lineinfile:
       path: "{{ report_file }}"
-      line: "DISK (df -hTP):\n{{ df_out.stdout }}"
-
-  - name: Memory usage
-    shell: free -h
-    register: free_out
-
-  - name: Add memory usage
-    lineinfile:
-      path: "{{ report_file }}"
-      line: "MEMORY (free -h):\n{{ free_out.stdout }}"
+      line: "TIME SYNC:\n{{ timesync.stdout }}"
 
   # =========================
   # CONFIG FILES
   # =========================
 
-  - name: /etc/fstab
-    shell: cat /etc/fstab
-    register: fstab_out
+  - name: /etc/hosts
+    shell: cat /etc/hosts
+    register: hosts_out
 
-  - name: Add fstab
-    lineinfile:
-      path: "{{ report_file }}"
-      line: "FSTAB:\n{{ fstab_out.stdout }}"
+  - name: /etc/sudoers (safe view)
+    shell: cat /etc/sudoers | grep -v '^#' || true
+    register: sudo_out
+    ignore_errors: yes
 
   - name: /etc/resolv.conf
     shell: cat /etc/resolv.conf
     register: resolv_out
 
-  - name: Add resolv.conf
-    lineinfile:
-      path: "{{ report_file }}"
-      line: "RESOLV.CONF:\n{{ resolv_out.stdout }}"
+  - name: /etc/fstab
+    shell: cat /etc/fstab
+    register: fstab_out
 
-  - name: /etc/redhat-release
-    shell: cat /etc/redhat-release || true
-    register: os_out
+  - name: /etc/inittab (legacy systems)
+    shell: cat /etc/inittab || true
+    register: inittab_out
     ignore_errors: yes
 
-  - name: Add OS release
-    lineinfile:
-      path: "{{ report_file }}"
-      line: "OS RELEASE:\n{{ os_out.stdout | default('Not Found') }}"
+  - name: /etc/hosts again (duplicate safe)
+    shell: cat /etc/hosts
+    register: hosts2_out
 
   # =========================
-  # NETWORK INFO
+  # DISK / LVM
   # =========================
 
-  - name: Network interfaces
-    shell: ifconfig -a
-    register: ifcfg_out
+  - name: df -hTP
+    shell: df -hTP
+    register: df_out
+
+  - name: vgdisplay
+    shell: vgdisplay -v
+    register: vg_out
     ignore_errors: yes
 
-  - name: Add network info
-    lineinfile:
-      path: "{{ report_file }}"
-      line: "NETWORK (ifconfig -a):\n{{ ifcfg_out.stdout }}"
-
   # =========================
-  # KERNEL INFO
+  # SYSTEM INFO
   # =========================
 
   - name: uname -a
     shell: uname -a
     register: uname_a
 
-  - name: uname -r
-    shell: uname -r
-    register: uname_r
+  - name: OS release
+    shell: cat /etc/redhat-release || cat /etc/os-release
+    register: os_out
+    ignore_errors: yes
 
-  - name: Add kernel info
-    lineinfile:
-      path: "{{ report_file }}"
-      line: |
-        UNAME -A:
-        {{ uname_a.stdout }}
-
-        KERNEL VERSION:
-        {{ uname_r.stdout }}
+  - name: runlevel
+    shell: runlevel
+    register: runlevel_out
+    ignore_errors: yes
 
   # =========================
-  # READ FINAL REPORT
+  # PACKAGES
   # =========================
 
-  - name: Read report file
-    slurp:
-      src: "{{ report_file }}"
-    register: report_data
-
-  - name: Convert report
-    set_fact:
-      report_content: "{{ report_data.content | b64decode }}"
+  - name: rpm packages
+    shell: rpm -qa
+    register: rpm_out
+    ignore_errors: yes
 
   # =========================
-  # SEND EMAIL
+  # PROCESS CHECKS
   # =========================
 
-  - name: Send email with report
-      mail: asifali388@gmail.com
-      host: vm01
-      port: 25
-      to: "{{ mail_to }}"
-      subject: "{{ mail_subject }}"
-      body: "{{ report_content }}"---
-- name: Linux Server Precheck with Report and Email
-  hosts: all
-  become: yes
-  gather_facts: yes
-
-  vars:
-    report_file: "/tmp/linux_precheck_report.txt"
-    mail_to: "asifali388@gmail.com"
-    mail_subject: "Linux Precheck Report"
-
-  tasks:
+  - name: ps -ef
+    shell: ps -ef
+    register: ps_out
 
   # =========================
-  # CREATE REPORT HEADER
+  # NETWORK INFO
   # =========================
 
-  - name: Initialize report file
+  - name: ifconfig -a
+    shell: ifconfig -a
+    register: ifcfg_out
+    ignore_errors: yes
+
+  - name: ethtool (interfaces summary)
+    shell: "for i in $(ls /sys/class/net); do echo $i; ethtool $i 2>/dev/null || true; echo '---'; done"
+    register: ethtool_out
+    ignore_errors: yes
+
+  # =========================
+  # CRON
+  # =========================
+
+  - name: crontab -l
+    shell: crontab -l || true
+    register: cron_out
+    ignore_errors: yes
+
+  # =========================
+  # WRITE REPORT
+  # =========================
+
+  - name: Append all collected data
     copy:
       dest: "{{ report_file }}"
       content: |
-        ================================
-        Linux Precheck Report
-        ================================
-        Date: {{ ansible_date_time.date }}
-        Host: {{ ansible_hostname }}
-        ================================
+        ======================================
+        SYSTEM AUDIT DETAILS
+        ======================================
 
-  # =========================
-  # SYSTEM INFO
-  # =========================
+        UPTIME:
+        {{ uptime_out.stdout }}
 
-  - name: Add system information
-    lineinfile:
-      path: "{{ report_file }}"
-      line: |
-        OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
-        Kernel: {{ ansible_kernel }}
-        CPU: {{ ansible_processor_vcpus }} cores
-        Memory: {{ ansible_memtotal_mb }} MB
+        TIMEZONE:
+        {{ tz_out.stdout | default('N/A') }}
 
-  # =========================
-  # DISK CHECK
-  # =========================
+        TIME SYNC:
+        {{ timesync.stdout }}
 
-  - name: Check disk usage
-    shell: df -h /
-    register: disk
+        DF -hTP:
+        {{ df_out.stdout }}
 
-  - name: Append disk usage
-    lineinfile:
-      path: "{{ report_file }}"
-      line: "{{ disk.stdout }}"
+        VGDISPLAY:
+        {{ vg_out.stdout | default('N/A') }}
 
-  # =========================
-  # MEMORY CHECK
-  # =========================
+        RPM PACKAGES:
+        {{ rpm_out.stdout | default('N/A') }}
 
-  - name: Check memory usage
-    shell: free -m
-    register: mem
+        PS -EF:
+        {{ ps_out.stdout }}
 
-  - name: Append memory usage
-    lineinfile:
-      path: "{{ report_file }}"
-      line: "{{ mem.stdout }}"
+        IFCONFIG:
+        {{ ifcfg_out.stdout | default('N/A') }}
 
-  # =========================
-  # NETWORK CHECK
-  # =========================
+        ETHTOOL:
+        {{ ethtool_out.stdout | default('N/A') }}
 
-  - name: Check network connectivity
-    shell: ping -c 2 8.8.8.8
-    register: net
-    ignore_errors: yes
+        CRONTAB:
+        {{ cron_out.stdout }}
 
-  - name: Append network status
-    lineinfile:
-      path: "{{ report_file }}"
-      line: "Network: {{ 'UP' if net.rc == 0 else 'DOWN' }}"
+        UNAME:
+        {{ uname_a.stdout }}
 
-  # =========================
-  # SSH SERVICE CHECK
-  # =========================
+        OS RELEASE:
+        {{ os_out.stdout }}
 
-  - name: Check SSH service
-    shell: systemctl is-active sshd
-    register: ssh
-    ignore_errors: yes
+        RUNLEVEL:
+        {{ runlevel_out.stdout | default('N/A') }}
 
-  - name: Append SSH status
-    lineinfile:
-      path: "{{ report_file }}"
-      line: "SSH Service: {{ ssh.stdout | default('unknown') }}"
+        FSTAB:
+        {{ fstab_out.stdout }}
 
-  # =========================
-  # UPTIME CHECK
-  # =========================
+        HOSTS:
+        {{ hosts_out.stdout }}
 
-  - name: Check uptime
-    shell: uptime
-    register: up
+        SUDOERS:
+        {{ sudo_out.stdout | default('N/A') }}
 
-  - name: Append uptime
-    lineinfile:
-      path: "{{ report_file }}"
-      line: "{{ up.stdout }}"
+        RESOLV.CONF:
+        {{ resolv_out.stdout }}
+
+        INITTAB:
+        {{ inittab_out.stdout | default('N/A') }}
 
   # =========================
   # READ REPORT
   # =========================
 
-  - name: Read report file
+  - name: Read report
     slurp:
       src: "{{ report_file }}"
-    register: report
+    register: report_data
 
   - name: Set report content
     set_fact:
-      report_content: "{{ report.content | b64decode }}"
+      report_content: "{{ report_data.content | b64decode }}"
 
   # =========================
-  # SEND EMAIL
+  # EMAIL REPORT
   # =========================
 
-  - name: Send report via email
-      mail: asifali388@gmail.com
-      host: vm01
+  - name: Send report email
+    mail:
+      host: localhost
       port: 25
-      to: "{{ mail_to }}"
-      subject: "{{ mail_subject }}"
+      to: "admin@example.com"
+      subject: "Linux Full System Audit Report"
       body: "{{ report_content }}"
