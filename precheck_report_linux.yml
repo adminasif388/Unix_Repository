@@ -1,4 +1,112 @@
 ---
+- name: Linux Precheck + Postcheck with Report & Email
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    report_file: "/tmp/linux_validation_report.txt"
+    mail_to: "admin@example.com"
+    mail_subject: "Linux Server Validation Report"
+
+  tasks:
+
+  # =========================
+  # PRECHECK SECTION
+  # =========================
+
+  - name: Start report file
+    copy:
+      dest: "{{ report_file }}"
+      content: |
+        ===== Linux Validation Report =====
+        Date: {{ ansible_date_time.date }}
+        Host: {{ ansible_hostname }}
+        ===================================
+
+  - name: Collect system info
+    lineinfile:
+      path: "{{ report_file }}"
+      line: |
+        OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+        Kernel: {{ ansible_kernel }}
+        CPU: {{ ansible_processor_vcpus }} cores
+        Memory: {{ ansible_memtotal_mb }} MB
+
+  - name: Check disk usage
+    shell: df -h /
+    register: disk
+
+  - name: Append disk info
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "{{ disk.stdout }}"
+
+  - name: Check memory usage
+    shell: free -m
+    register: mem
+
+  - name: Append memory info
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "{{ mem.stdout }}"
+
+  - name: Check network connectivity
+    shell: ping -c 2 8.8.8.8
+    register: net
+    ignore_errors: yes
+
+  - name: Append network status
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "Network: {{ 'UP' if net.rc == 0 else 'DOWN' }}"
+
+  # =========================
+  # POST VALIDATION SECTION
+  # =========================
+
+  - name: Check SSH service
+    shell: systemctl is-active sshd
+    register: ssh
+
+  - name: Append SSH status
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "SSH Service: {{ ssh.stdout }}"
+
+  - name: Check uptime
+    shell: uptime
+    register: up
+
+  - name: Append uptime
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "Uptime: {{ up.stdout }}"
+
+  # =========================
+  # READ FINAL REPORT
+  # =========================
+
+  - name: Read report file
+    slurp:
+      src: "{{ report_file }}"
+    register: final_report
+
+  - name: Convert report to text
+    set_fact:
+      report_content: "{{ final_report.content | b64decode }}"
+
+  # =========================
+  # SEND EMAIL
+  # =========================
+
+  - name: Send validation report via email
+    mail:
+      host: localhost
+      port: 25
+      to: "{{ mail_to }}"
+      subject: "{{ mail_subject }}"
+      body: "{{ report_content }}"---
 - name: Linux Server Precheck Playbook
   hosts: all
   become: yes
