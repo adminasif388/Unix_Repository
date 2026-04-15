@@ -241,14 +241,4 @@
     set_fact:
       report_content: "{{ report_data.content | b64decode }}"
 
-  # =========================
-  # EMAIL REPORT
-  # =========================
-
-  - name: Send report email
-    mail:
-      host: localhost
-      port: 25
-      to: "admin@example.com"
-      subject: "Linux Full System Audit Report"
-      body: "{{ report_content }}"
+ 
