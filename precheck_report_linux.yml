@@ -6,7 +6,7 @@
 
   vars:
     report_file: "/tmp/linux_validation_report.txt"
-    mail_to: "admin@example.com"
+    mail_to: "asifali388@gmail.com"
     mail_subject: "Linux Server Validation Report"
 
   tasks:
@@ -102,7 +102,7 @@
 
   - name: Send validation report via email
     mail:
-      host: localhost
+      host: vm01
       port: 25
       to: "{{ mail_to }}"
       subject: "{{ mail_subject }}"
