@@ -7,21 +7,6 @@
   vars:
     report_file: /tmp/precheck_check_report.txt
     
-- name: Ensure reports directory exists
-        file:
-        path: /tmp
-        state: directory
-        delegate_to: vm01
-
-- name: Save report to file
-        copy:
-        content: "{{ final_report }}"
-        dest: "/tmp/{{ inventory_hostname }}_precheck_check_report.txt"
-        delegate_to: vm01
-
-- name: Show report location
-        debug:
-        msg: "Report saved for {{ inventory_hostname }} in /tmp/"  
 
   tasks:
 
