@@ -7,7 +7,6 @@
   vars:
     report_file: /tmp/precheck_check_report.txt
     
-
   tasks:
 
     - name: Initialize report file
