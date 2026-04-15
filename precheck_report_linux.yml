@@ -156,7 +156,7 @@
   # =========================
 
   - name: Send email with report
-    mail: asifai388@gmail.com
+      mail: asifali388@gmail.com
       host: vm01
       port: 25
       to: "{{ mail_to }}"
@@ -287,7 +287,7 @@
   # =========================
 
   - name: Send report via email
-    mail: asifai388@gmail.com
+      mail: asifali388@gmail.com
       host: vm01
       port: 25
       to: "{{ mail_to }}"
