@@ -1,4 +1,167 @@
 ---
+- name: Linux System Health Report + Email
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    report_file: "/tmp/linux_system_report.txt"
+    mail_to: "asifali388@gmail.com"
+    mail_subject: "Linux System Health Report"
+
+  tasks:
+
+  # =========================
+  # CREATE REPORT HEADER
+  # =========================
+
+  - name: Initialize report file
+    copy:
+      dest: "{{ report_file }}"
+      content: |
+        =====================================
+        Linux System Health Report
+        =====================================
+        Host: {{ ansible_hostname }}
+        Date: {{ ansible_date_time.date }}
+        =====================================
+
+  # =========================
+  # BASIC SYSTEM COMMANDS
+  # =========================
+
+  - name: Collect uptime
+    shell: uptime
+    register: uptime_out
+
+  - name: Add uptime to report
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "UPTIME:\n{{ uptime_out.stdout }}"
+
+  - name: Collect date
+    shell: date
+    register: date_out
+
+  - name: Add date to report
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "DATE:\n{{ date_out.stdout }}"
+
+  # =========================
+  # DISK & MEMORY
+  # =========================
+
+  - name: Disk usage
+    shell: df -hTP
+    register: df_out
+
+  - name: Add disk usage
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "DISK (df -hTP):\n{{ df_out.stdout }}"
+
+  - name: Memory usage
+    shell: free -h
+    register: free_out
+
+  - name: Add memory usage
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "MEMORY (free -h):\n{{ free_out.stdout }}"
+
+  # =========================
+  # CONFIG FILES
+  # =========================
+
+  - name: /etc/fstab
+    shell: cat /etc/fstab
+    register: fstab_out
+
+  - name: Add fstab
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "FSTAB:\n{{ fstab_out.stdout }}"
+
+  - name: /etc/resolv.conf
+    shell: cat /etc/resolv.conf
+    register: resolv_out
+
+  - name: Add resolv.conf
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "RESOLV.CONF:\n{{ resolv_out.stdout }}"
+
+  - name: /etc/redhat-release
+    shell: cat /etc/redhat-release || true
+    register: os_out
+    ignore_errors: yes
+
+  - name: Add OS release
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "OS RELEASE:\n{{ os_out.stdout | default('Not Found') }}"
+
+  # =========================
+  # NETWORK INFO
+  # =========================
+
+  - name: Network interfaces
+    shell: ifconfig -a
+    register: ifcfg_out
+    ignore_errors: yes
+
+  - name: Add network info
+    lineinfile:
+      path: "{{ report_file }}"
+      line: "NETWORK (ifconfig -a):\n{{ ifcfg_out.stdout }}"
+
+  # =========================
+  # KERNEL INFO
+  # =========================
+
+  - name: uname -a
+    shell: uname -a
+    register: uname_a
+
+  - name: uname -r
+    shell: uname -r
+    register: uname_r
+
+  - name: Add kernel info
+    lineinfile:
+      path: "{{ report_file }}"
+      line: |
+        UNAME -A:
+        {{ uname_a.stdout }}
+
+        KERNEL VERSION:
+        {{ uname_r.stdout }}
+
+  # =========================
+  # READ FINAL REPORT
+  # =========================
+
+  - name: Read report file
+    slurp:
+      src: "{{ report_file }}"
+    register: report_data
+
+  - name: Convert report
+    set_fact:
+      report_content: "{{ report_data.content | b64decode }}"
+
+  # =========================
+  # SEND EMAIL
+  # =========================
+
+  - name: Send email with report
+    mail: asifai388@gmail.com
+      host: vm01
+      port: 25
+      to: "{{ mail_to }}"
+      subject: "{{ mail_subject }}"
+      body: "{{ report_content }}"---
 - name: Linux Server Precheck with Report and Email
   hosts: all
   become: yes
@@ -124,7 +287,7 @@
   # =========================
 
   - name: Send report via email
-    mail:
+    mail: asifai388@gmail.com
       host: vm01
       port: 25
       to: "{{ mail_to }}"
